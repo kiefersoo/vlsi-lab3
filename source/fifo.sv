@@ -29,8 +29,8 @@ module fifo (
     assign full = (size == 4);
     assign out = data[0];
 
-    // this fifo is synchronous
-    always @ (posedge clk or negedge rst_n) begin
+    // this fifo is synchronous and the reset is too
+    always @ (posedge clk) begin
 
         if (!rst_n) begin
             size <= 0;
@@ -50,7 +50,6 @@ module fifo (
                size <= size - 1;
             end
 
-            // handling the case of simultaneous push and pop (this shouldn't happen in our FSM)
             if (!empty && push && pop) begin
                 // size doesn't change
                 for (int i = 1; i < size; i++) begin
