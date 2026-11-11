@@ -3,6 +3,7 @@
 fifo implementation
 
 using a shifter based approach where pushes shift values to a deeper register
+this probably consumes more power than a pointer based approach
 control signals coming from control unit determine whether a push or pop occurs on this cycle
 
 using the terms push and pop confused me and i made a stack at first
@@ -49,7 +50,7 @@ module fifo (
                size <= size - 1;
             end
 
-            // handling the case of simultaneous push and pop
+            // handling the case of simultaneous push and pop (this shouldn't happen in our FSM)
             if (!empty && push && pop) begin
                 // size doesn't change
                 for (int i = 1; i < size; i++) begin
