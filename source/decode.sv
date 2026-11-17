@@ -24,7 +24,7 @@ module decode (
     input wire [25:0] PADDR,
     input wire [31:0] PWDATA,
 
-    output wire [31:0] PRDATA,
+    output logic [31:0] PRDATA,
 
     // input/output signals that interface with the rest of the design
     // the decode logic serves as MASTER to FIFOs
@@ -48,8 +48,8 @@ module decode (
         A_DATA = 3'b000,
         W_DATA = 3'b001,
         COMMAND = 3'b010,
-        STATUS = 3'b100,
-        RESULT = 3'b101
+        STATUS = 3'b011,
+        RESULT = 3'b100
 
     } address_t;
 
@@ -75,6 +75,8 @@ module decode (
             end
             STATUS: begin
                 // read status register (in control logic block?) 
+                PRDATA <= 32'h0000;
+                
             end
             RESULT: begin
                 // read result from end of MAC
