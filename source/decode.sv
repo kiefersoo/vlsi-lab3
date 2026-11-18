@@ -1,3 +1,4 @@
+`timescale 1ps/1ps
 /*
 decode logic
 
@@ -26,65 +27,57 @@ module decode (
 
     output logic [31:0] PRDATA,
 
-    // input/output signals that interface with the rest of the design
-    // the decode logic serves as MASTER to FIFOs
-    // PUSHes, but POPs will come from CTRL logic
-    output logic [31:0] a_fifo_input,
-    output logic push_a_fifo,
+    output wire [31:0] a_fifo_input,
+    output wire        push_a_fifo,
+    output wire [31:0] w_fifo_input,
+    output wire        push_w_fifo,
+    output wire [1:0]  ctrl_command,
+    output wire        push_command,
 
-    output logic [31:0] w_fifo_input,
-    output logic push_w_fifo, 
-
-    // command going to the control block
-    output logic [1:0] ctrl_command,
-    output logic push_command 
-    
-    
-
+    input  wire        busy,
+    input  wire        result_fifo_empty,
+    input  wire        result_fifo_full,
+    input  wire [31:0] result_fifo_output,
+    output wire        pop_result_fifo
 );
-    // decode the command coming from the bus in PADDR[2:0]
-    typedef enum logic [2:0] { 
+    localparam logic [2:0] A_DATA  = 3'b000,
+                           W_DATA  = 3'b001,
+                           COMMAND = 3'b010,
+                           STATUS  = 3'b011,
+                           RESULT  = 3'b100;
 
-        A_DATA = 3'b000,
-        W_DATA = 3'b001,
-        COMMAND = 3'b010,
-        STATUS = 3'b011,
-        RESULT = 3'b100
+    wire write_transfer = CLEAR_B && PSEL && PWRITE;
+    wire read_transfer  = CLEAR_B && PSEL && !PWRITE;
+    logic [31:0] last_result;
 
-    } address_t;
+    assign a_fifo_input = PWDATA;
+    assign w_fifo_input = PWDATA;
+    assign ctrl_command = PWDATA[1:0];
+    assign push_a_fifo  = write_transfer && (PADDR[2:0] == A_DATA);
+    assign push_w_fifo  = write_transfer && (PADDR[2:0] == W_DATA);
+    assign push_command = write_transfer && (PADDR[2:0] == COMMAND);
+    assign pop_result_fifo = read_transfer && (PADDR[2:0] == RESULT)
+                                           && !result_fifo_empty;
 
-    always @ (posedge PCLK) begin
-        case (PADDR[2:0])
-            A_DATA: begin
-                // write to the Activation FIFO
-                push_a_fifo <= 1; a_fifo_input <= PWDATA;
-                push_w_fifo <= 0; w_fifo_input <= 32'h0000;
-                push_command <= 0; ctrl_command <= 2'b00;
-            end
-            W_DATA: begin
-                // write to the Weight FIFO 
-                push_a_fifo <= 0; a_fifo_input <= 32'h0000;
-                push_w_fifo <= 1; w_fifo_input <= PWDATA;
-                push_command <= 0; ctrl_command <= 2'b00;
-            end
-            COMMAND: begin
-                // write a command to control logic buffer 
-                push_a_fifo <= 0; a_fifo_input <= 32'h0000;
-                push_w_fifo <= 0; w_fifo_input <= 32'h0000;
-                push_command <= 1; ctrl_command <= PWDATA[1:0];
-            end
-            STATUS: begin
-                // read status register (in control logic block?) 
-                PRDATA <= 32'h0000;
-                
-            end
-            RESULT: begin
-                // read result from end of MAC
-            end
-            default: begin
-                // shouldn't get here
-            end
-        endcase
+    // Register the head before the FIFO advances. Empty result reads return
+    // the last result read, matching the repeated reads in the supplied tests.
+    always_ff @(posedge PCLK) begin
+        if (!CLEAR_B) begin
+            PRDATA <= 32'd0;
+            last_result <= 32'd0;
+        end else if (read_transfer) begin
+            case (PADDR[2:0])
+                STATUS: PRDATA <= {29'd0, result_fifo_full, result_fifo_empty, busy};
+                RESULT: begin
+                    if (!result_fifo_empty) begin
+                        PRDATA <= result_fifo_output;
+                        last_result <= result_fifo_output;
+                    end else begin
+                        PRDATA <= last_result;
+                    end
+                end
+                default: PRDATA <= 32'd0;
+            endcase
+        end
     end
-
 endmodule
